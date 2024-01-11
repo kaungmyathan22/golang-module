@@ -35,6 +35,18 @@ type UploadFile struct {
 	FileSize         int64
 }
 
+func (t *Tools) UploadFile(r *http.Request, uploadDir string, rename ...bool) (*UploadFile, error) {
+	renameFile := true
+	if len(rename) > 0 {
+		renameFile = rename[0]
+	}
+	files, err := t.UploadFiles(r, uploadDir, renameFile)
+	if err != nil {
+		return nil, err
+	}
+	return files[0], nil
+}
+
 func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) ([]*UploadFile, error) {
 	renameFile := true
 	if len(rename) > 0 {
@@ -58,8 +70,19 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 				}
 				defer infile.Close()
 				buff := make([]byte, 512)
+				_, err = infile.Read(buff)
+				if err != nil && err != io.EOF {
+					return nil, err
+				}
+
+				// Reset the file cursor to the beginning
+				_, err = infile.Seek(0, 0)
+				if err != nil {
+					return nil, err
+				}
 				allowed := false
 				fileType := http.DetectContentType(buff)
+				fmt.Println(fileType)
 				if len(t.AllowedFileTypes) > 0 {
 					for _, x := range t.AllowedFileTypes {
 						if strings.EqualFold(fileType, x) {
@@ -92,6 +115,7 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 					}
 					uploadedFile.FileSize = fileSize
 				}
+				uploadedFile.OriginalFileName = hdr.Filename
 				uploadedFiles = append(uploadedFiles, &uploadedFile)
 				return uploadedFiles, nil
 			}(uploadedFiles)
